@@ -15,18 +15,21 @@
         .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
     </style>
 </head>
-<body class="bg-slate-900">
+<body class="bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
     <div id="root"></div>
 
     <script type="text/babel">
+        // De-structure Lucide Icons from the global object
+        const { 
+            Download, Plus, Trash2, TrendingUp, Target, 
+            BarChart3, Search, Filter, Calendar, Edit2, Check, X 
+        } = lucide;
+
         const { useState, useEffect, useMemo } = React;
 
         const TradingJournal = () => {
-            // State & Data Persistence
-            const [trades, setTrades] = useState(() => {
-                const saved = localStorage.getItem('tradingJournalTrades');
-                return saved ? JSON.parse(saved) : [];
-            });
+            // State management exactly as defined in the source file
+            const [trades, setTrades] = useState([]);
             const [activeTab, setActiveTab] = useState('new');
             const [searchTerm, setSearchTerm] = useState('');
             const [filterDirection, setFilterDirection] = useState('all');
@@ -41,12 +44,18 @@
                 setup: '', timeframe: '1D', notes: ''
             });
 
+            // Logic: Load/Save to LocalStorage
+            useEffect(() => {
+                const saved = localStorage.getItem('tradingJournalTrades');
+                if (saved) { try { setTrades(JSON.parse(saved)); } catch (e) { console.error('Load failed'); } }
+            }, []);
+
             useEffect(() => {
                 localStorage.setItem('tradingJournalTrades', JSON.stringify(trades));
                 if (window.lucide) lucide.createIcons();
             }, [trades, activeTab]);
 
-            // Logic: Calculations
+            // Logic: Calculations (PnL, RR)
             const calculatePnL = (entry, exit, size, direction) => {
                 const e = parseFloat(entry), x = parseFloat(exit), sz = parseFloat(size || 0);
                 if (isNaN(e) || isNaN(x)) return 0;
@@ -61,7 +70,8 @@
                 return risk === 0 ? null : (reward / risk).toFixed(2);
             };
 
-            const addTrade = () => {
+            // Logic: Form Handling
+            const handleAddTrade = () => {
                 if (!formData.ticker || !formData.entry) return alert("Ticker and Entry are required");
                 const pnl = calculatePnL(formData.entry, formData.exit, formData.size, formData.direction);
                 const newTrade = { 
@@ -71,12 +81,11 @@
                     plannedRR: calculateRR(formData.entry, formData.stopLoss, formData.target, formData.direction)
                 };
                 setTrades([newTrade, ...trades]);
-                setFormData({...formData, ticker: '', entry: '', exit: '', size: '', stopLoss: '', target: '', notes: ''});
                 setShowSuccessMsg(true);
                 setTimeout(() => setShowSuccessMsg(false), 3000);
             };
 
-            // Logic: Statistics
+            // Logic: Stats Engine
             const stats = useMemo(() => {
                 if (trades.length === 0) return null;
                 const winners = trades.filter(t => t.pnl > 0);
@@ -85,124 +94,84 @@
                     totalTrades: trades.length,
                     winRate: (winners.length / trades.length * 100).toFixed(1),
                     totalPnL: totalPnL.toFixed(2),
-                    expectancy: (totalPnL / trades.length).toFixed(2)
+                    avgRR: (trades.reduce((sum, t) => sum + (parseFloat(t.plannedRR) || 0), 0) / trades.length).toFixed(2)
                 };
             }, [trades]);
 
             const currentRR = calculateRR(formData.entry, formData.stopLoss, formData.target, formData.direction);
 
             return (
-                <div className="min-h-screen p-4 md:p-8 flex items-center justify-center">
-                    <div className="w-full max-w-6xl bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl overflow-hidden animate-fade-in border border-white/20">
-                        {/* Header */}
-                        <div className="p-8 bg-gradient-to-r from-slate-50 to-indigo-50 border-b flex justify-between items-center">
+                <div className="min-h-screen p-4 md:p-8">
+                    <div className="max-w-7xl mx-auto bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-6 animate-fade-in">
+                        {/* Header Section */}
+                        <div className="flex flex-col md:flex-row justify-between items-center mb-8">
                             <div>
-                                <h1 className="text-3xl font-black text-slate-900 tracking-tight italic">TRADING JOURNAL PRO</h1>
-                                <p className="text-slate-500 font-bold text-sm uppercase tracking-widest">Performance Analytics</p>
+                                <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-pink-600 bg-clip-text text-transparent">Trading Journal</h1>
+                                <p className="text-slate-600 text-sm mt-1">Track, Analyze, Improve</p>
                             </div>
-                            {showSuccessMsg && <span className="bg-emerald-500 text-white px-4 py-2 rounded-full text-sm font-bold">Trade Saved!</span>}
+                            {showSuccessMsg && <div className="bg-emerald-500 text-white px-4 py-2 rounded-lg text-sm">Success!</div>}
                         </div>
 
                         {/* Navigation Tabs */}
-                        <div className="flex bg-slate-100/50 p-2">
+                        <div className="flex gap-4 border-b-2 mb-8">
                             {['new', 'history', 'stats'].map(tab => (
                                 <button key={tab} onClick={() => setActiveTab(tab)} 
-                                    className={`flex-1 py-3 font-black rounded-xl transition-all ${activeTab === tab ? 'bg-white text-indigo-600 shadow-md scale-105' : 'text-slate-400 hover:text-slate-600'}`}>
-                                    {tab.toUpperCase()}
+                                    className={`pb-4 px-6 font-bold uppercase tracking-wider transition ${activeTab === tab ? 'text-blue-600 border-b-4 border-blue-600' : 'text-slate-400 hover:text-slate-600'}`}>
+                                    {tab}
                                 </button>
                             ))}
                         </div>
 
-                        {/* Content: New Trade */}
+                        {/* Form Content */}
                         {activeTab === 'new' && (
-                            <div className="p-8 space-y-6">
+                            <div className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-black text-slate-400 uppercase tracking-tighter">Ticker</label>
-                                        <input type="text" placeholder="BTC/USD" className="w-full p-4 bg-slate-100 border-none rounded-2xl focus:ring-4 focus:ring-indigo-500/20 font-bold uppercase" 
-                                            value={formData.ticker} onChange={e => setFormData({...formData, ticker: e.target.value})} />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-black text-slate-400 uppercase tracking-tighter">Entry</label>
-                                        <input type="number" placeholder="0.00" className="w-full p-4 bg-slate-100 border-none rounded-2xl" 
-                                            value={formData.entry} onChange={e => setFormData({...formData, entry: e.target.value})} />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-black text-slate-400 uppercase tracking-tighter">Exit</label>
-                                        <input type="number" placeholder="0.00" className="w-full p-4 bg-slate-100 border-none rounded-2xl" 
-                                            value={formData.exit} onChange={e => setFormData({...formData, exit: e.target.value})} />
-                                    </div>
+                                    <input type="text" placeholder="Ticker" className="p-4 bg-slate-100 rounded-xl border-none focus:ring-2 focus:ring-blue-500 uppercase font-bold" 
+                                        onChange={e => setFormData({...formData, ticker: e.target.value})} />
+                                    <input type="number" placeholder="Entry" className="p-4 bg-slate-100 rounded-xl border-none" 
+                                        onChange={e => setFormData({...formData, entry: e.target.value})} />
+                                    <input type="number" placeholder="Exit" className="p-4 bg-slate-100 rounded-xl border-none" 
+                                        onChange={e => setFormData({...formData, exit: e.target.value})} />
                                 </div>
-
-                                {/* Risk Management UI */}
-                                <div className="bg-gradient-to-br from-indigo-600 to-violet-700 p-8 rounded-3xl text-white shadow-xl shadow-indigo-200">
-                                    <div className="flex items-center gap-2 mb-6">
-                                        <i data-lucide="target" className="w-5 h-5"></i>
-                                        <h3 className="font-black uppercase tracking-widest text-sm">Risk Calculator</h3>
+                                <div className="bg-blue-50 p-6 rounded-2xl border-2 border-blue-100">
+                                    <div className="text-sm font-bold text-blue-800 mb-4 flex items-center gap-2">
+                                        <i data-lucide="target"></i> Risk Management
                                     </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                                        <input type="number" placeholder="Stop Loss" className="p-4 bg-white/10 border border-white/20 rounded-2xl text-white placeholder-white/50 focus:bg-white/20 transition"
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center text-center">
+                                        <input type="number" placeholder="Stop Loss" className="p-4 bg-white rounded-xl border-2 border-blue-200" 
                                             onChange={e => setFormData({...formData, stopLoss: e.target.value})} />
-                                        <input type="number" placeholder="Target" className="p-4 bg-white/10 border border-white/20 rounded-2xl text-white placeholder-white/50 focus:bg-white/20 transition"
+                                        <input type="number" placeholder="Target" className="p-4 bg-white rounded-xl border-2 border-blue-200" 
                                             onChange={e => setFormData({...formData, target: e.target.value})} />
-                                        <div className="text-center">
-                                            <p className="text-xs font-bold text-indigo-200 uppercase">Planned R:R</p>
-                                            <p className="text-4xl font-black">{currentRR ? `${currentRR}:1` : '--'}</p>
+                                        <div>
+                                            <p className="text-xs font-bold text-slate-500">PLANNED R:R</p>
+                                            <p className="text-3xl font-black text-blue-600">{currentRR ? `${currentRR}:1` : '--'}</p>
                                         </div>
                                     </div>
                                 </div>
-
-                                <button onClick={addTrade} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black text-xl hover:bg-black transition-all shadow-xl active:scale-95">
+                                <button onClick={handleAddTrade} className="w-full py-5 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-2xl font-black text-xl shadow-xl hover:scale-[1.01] transition-all">
                                     SAVE TRADE LOG
                                 </button>
                             </div>
                         )}
 
-                        {/* Content: History */}
-                        {activeTab === 'history' && (
-                            <div className="p-8 space-y-4 max-h-[500px] overflow-y-auto">
-                                {trades.length === 0 ? <p className="text-center py-20 text-slate-400 font-bold uppercase tracking-widest">No Logs Found</p> :
-                                    trades.map(t => (
-                                        <div key={t.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center group hover:border-indigo-500 transition-all">
-                                            <div className="flex gap-4 items-center">
-                                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black ${t.pnl >= 0 ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
-                                                    {t.direction === 'Long' ? 'L' : 'S'}
-                                                </div>
-                                                <div>
-                                                    <h4 className="font-black text-slate-800 text-lg">{t.ticker}</h4>
-                                                    <p className="text-xs font-bold text-slate-400 uppercase">{t.date}</p>
-                                                </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className={`text-xl font-black ${t.pnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                                    {t.pnl >= 0 ? '+' : ''}${t.pnl}
-                                                </p>
-                                                <p className="text-xs font-bold text-slate-400 uppercase">P&L Amount</p>
-                                            </div>
-                                        </div>
-                                    ))
-                                }
-                            </div>
-                        )}
-
-                        {/* Content: Stats */}
+                        {/* Stats Dashboard */}
                         {activeTab === 'stats' && stats && (
-                            <div className="p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                <div className="p-6 bg-blue-50 rounded-3xl border border-blue-100 text-center">
-                                    <p className="text-xs font-black text-blue-400 uppercase mb-1">Win Rate</p>
-                                    <p className="text-4xl font-black text-blue-600">{stats.winRate}%</p>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-6 animate-fade-in">
+                                <div className="p-8 bg-blue-50 rounded-3xl border-2 border-blue-100 text-center">
+                                    <p className="text-xs font-bold text-blue-400 uppercase tracking-widest mb-2">Win Rate</p>
+                                    <p className="text-5xl font-black text-blue-600">{stats.winRate}%</p>
                                 </div>
-                                <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100 text-center">
-                                    <p className="text-xs font-black text-emerald-400 uppercase mb-1">Total P&L</p>
-                                    <p className="text-4xl font-black text-emerald-600">${stats.totalPnL}</p>
+                                <div className="p-8 bg-emerald-50 rounded-3xl border-2 border-emerald-100 text-center">
+                                    <p className="text-xs font-bold text-emerald-400 uppercase tracking-widest mb-2">Total P&L</p>
+                                    <p className="text-5xl font-black text-emerald-600">${stats.totalPnL}</p>
                                 </div>
-                                <div className="p-6 bg-violet-50 rounded-3xl border border-violet-100 text-center">
-                                    <p className="text-xs font-black text-violet-400 uppercase mb-1">Trades</p>
-                                    <p className="text-4xl font-black text-violet-600">{stats.totalTrades}</p>
+                                <div className="p-8 bg-violet-50 rounded-3xl border-2 border-violet-100 text-center">
+                                    <p className="text-xs font-bold text-violet-400 uppercase tracking-widest mb-2">Avg R:R</p>
+                                    <p className="text-5xl font-black text-violet-600">{stats.avgRR}</p>
                                 </div>
-                                <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 text-center">
-                                    <p className="text-xs font-black text-slate-400 uppercase mb-1">Expectancy</p>
-                                    <p className="text-4xl font-black text-slate-800">${stats.expectancy}</p>
+                                <div className="p-8 bg-slate-50 rounded-3xl border-2 border-slate-100 text-center">
+                                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Trades</p>
+                                    <p className="text-5xl font-black text-slate-800">{stats.totalTrades}</p>
                                 </div>
                             </div>
                         )}
