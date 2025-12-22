@@ -1,17 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Journals</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trading Journal PWA</title>
+    <link rel="manifest" href="manifest.json">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
 </head>
 <body>
-  <h1>Journals</h1>
-  <p>App is running.</p>
-</body>
-</html>
+    <div id="root"></div>
 
-    }
-  </script>
+    <script type="text/babel">
+        // Import hooks from React global
+        const { useState, useEffect } = React;
+
+        const TradingJournal = () => {
+            // ... PASTE YOUR REACT CODE HERE ...
+            // (Note: Replace Lucide components like <Download /> with 
+            // the SVG equivalents or use lucide.createIcons)
+            return (
+                <div className="min-h-screen bg-slate-900 p-4">
+                    <h1 className="text-white text-2xl">My Journal</h1>
+                    {/* Rest of your UI code */}
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<TradingJournal />);
+    </script>
 </body>
 </html>
