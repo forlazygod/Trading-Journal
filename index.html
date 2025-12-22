@@ -3,29 +3,154 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Trading Journal PWA</title>
+    <title>Trading Journal Pro</title>
     <link rel="manifest" href="manifest.json">
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+    </style>
 </head>
-<body>
+<body class="bg-slate-900">
     <div id="root"></div>
 
     <script type="text/babel">
-        // Import hooks from React global
-        const { useState, useEffect } = React;
+        const { useState, useEffect, useMemo } = React;
 
         const TradingJournal = () => {
-            // ... PASTE YOUR REACT CODE HERE ...
-            // (Note: Replace Lucide components like <Download /> with 
-            // the SVG equivalents or use lucide.createIcons)
+            // State Management
+            const [trades, setTrades] = useState(() => {
+                const saved = localStorage.getItem('tradingJournalTrades');
+                return saved ? JSON.parse(saved) : [];
+            });
+            const [activeTab, setActiveTab] = useState('new');
+            const [searchTerm, setSearchTerm] = useState('');
+            const [filterDirection, setFilterDirection] = useState('all');
+            const [filterResult, setFilterResult] = useState('all');
+            const [editingId, setEditingId] = useState(null);
+            const [showSuccessMsg, setShowSuccessMsg] = useState(false);
+            
+            const [formData, setFormData] = useState({
+                date: new Date().toISOString().split('T')[0],
+                ticker: '', direction: 'Long', entry: '', exit: '',
+                size: '', stopLoss: '', target: '', strategy: '',
+                setup: '', timeframe: '1D', notes: ''
+            });
+
+            // Persistence & Icon Refresh
+            useEffect(() => {
+                localStorage.setItem('tradingJournalTrades', JSON.stringify(trades));
+                if (window.lucide) lucide.createIcons();
+            }, [trades, activeTab]);
+
+            // Calculation Logic
+            const calculatePnL = (entry, exit, size, direction) => {
+                const e = parseFloat(entry), x = parseFloat(exit), sz = parseFloat(size || 0);
+                if (isNaN(e) || isNaN(x)) return 0;
+                return direction === 'Long' ? ((x - e) * sz).toFixed(2) : ((e - x) * sz).toFixed(2);
+            };
+
+            const calculateRR = (entry, stop, target, direction) => {
+                const e = parseFloat(entry), s = parseFloat(stop), t = parseFloat(target);
+                if (isNaN(e) || isNaN(s) || isNaN(t)) return null;
+                const risk = direction === 'Long' ? Math.abs(e - s) : Math.abs(s - e);
+                const reward = direction === 'Long' ? Math.abs(t - e) : Math.abs(e - t);
+                return risk === 0 ? null : (reward / risk).toFixed(2);
+            };
+
+            // Actions
+            const handleAddTrade = () => {
+                if (!formData.ticker || !formData.entry || !formData.exit) return alert("Fill required fields");
+                const pnl = calculatePnL(formData.entry, formData.exit, formData.size, formData.direction);
+                const newTrade = { ...formData, id: Date.now(), pnl: parseFloat(pnl) };
+                setTrades([newTrade, ...trades]);
+                setShowSuccessMsg(true);
+                setTimeout(() => setShowSuccessMsg(false), 3000);
+            };
+
+            const exportCSV = () => {
+                const headers = ['Date', 'Ticker', 'PnL'].join(',');
+                const rows = trades.map(t => [t.date, t.ticker, t.pnl].join(',')).join('\n');
+                const blob = new Blob([[headers, rows].join('\n')], { type: 'text/csv' });
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'trades.csv';
+                a.click();
+            };
+
             return (
-                <div className="min-h-screen bg-slate-900 p-4">
-                    <h1 className="text-white text-2xl">My Journal</h1>
-                    {/* Rest of your UI code */}
+                <div className="min-h-screen p-4 md:p-8">
+                    <div className="max-w-6xl mx-auto bg-white rounded-3xl shadow-2xl overflow-hidden">
+                        {/* Header */}
+                        <div className="p-8 bg-slate-50 border-b flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div>
+                                <h1 className="text-3xl font-black text-slate-900 tracking-tight">TRADING JOURNAL</h1>
+                                <p className="text-slate-500 font-medium">Performance Tracking</p>
+                            </div>
+                            <button onClick={exportCSV} className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-3 rounded-2xl hover:bg-emerald-700 transition font-bold shadow-lg shadow-emerald-200">
+                                <i data-lucide="download"></i> Export CSV
+                            </button>
+                        </div>
+
+                        {/* Navigation */}
+                        <div className="flex border-b">
+                            {['new', 'history', 'stats'].map(tab => (
+                                <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-4 font-bold capitalize transition ${activeTab === tab ? 'text-indigo-600 border-b-4 border-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}>
+                                    {tab}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Main Form */}
+                        {activeTab === 'new' && (
+                            <div className="p-8 space-y-6 animate-fade-in">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-bold text-slate-700">Ticker</label>
+                                        <input type="text" placeholder="e.g. BTC" className="w-full p-4 bg-slate-100 border-none rounded-2xl focus:ring-2 focus:ring-indigo-500 uppercase font-bold" 
+                                               onChange={e => setFormData({...formData, ticker: e.target.value})} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-bold text-slate-700">Entry Price</label>
+                                        <input type="number" placeholder="0.00" className="w-full p-4 bg-slate-100 border-none rounded-2xl" 
+                                               onChange={e => setFormData({...formData, entry: e.target.value})} />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-bold text-slate-700">Exit Price</label>
+                                        <input type="number" placeholder="0.00" className="w-full p-4 bg-slate-100 border-none rounded-2xl" 
+                                               onChange={e => setFormData({...formData, exit: e.target.value})} />
+                                    </div>
+                                </div>
+                                <button onClick={handleAddTrade} className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black text-lg shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition flex items-center justify-center gap-3">
+                                    <i data-lucide="plus-circle"></i> SAVE TRADE
+                                </button>
+                            </div>
+                        )}
+
+                        {/* History */}
+                        {activeTab === 'history' && (
+                            <div className="p-8 space-y-4 animate-fade-in">
+                                {trades.length === 0 ? <p className="text-center py-20 text-slate-400 font-medium">No trades logged yet.</p> : 
+                                    trades.map(t => (
+                                        <div key={t.id} className="p-6 bg-slate-50 rounded-2xl flex justify-between items-center border border-slate-100 hover:border-indigo-200 transition">
+                                            <div>
+                                                <h3 className="font-black text-xl text-slate-800">{t.ticker}</h3>
+                                                <p className="text-slate-500 text-sm font-bold">{t.date}</p>
+                                            </div>
+                                            <div className={`text-2xl font-black ${t.pnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                {t.pnl >= 0 ? '+' : ''}${t.pnl}
+                                            </div>
+                                        </div>
+                                    ))
+                                }
+                            </div>
+                        )}
+                    </div>
                 </div>
             );
         };
