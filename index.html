@@ -1,218 +1,781 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Professional Trading Journal</title>
-    <link rel="manifest" href="manifest.json">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
-        .animate-fade-in { animation: fadeIn 0.3s ease-out forwards; }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Professional trading journal to track and analyze your trades">
+  <meta name="theme-color" content="#1e40af">
+  <title>Trading Journal</title>
+  
+  <!-- PWA Meta Tags -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Trading Journal">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <style>
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .fade-in { animation: fadeIn 0.3s ease-out; }
+  </style>
 </head>
-<body class="bg-slate-900">
-    <div id="root"></div>
+<body>
+  <div id="app"></div>
 
-    <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
+  <script>
+    // Simple Trading Journal App
+    class TradingJournal {
+      constructor() {
+        this.trades = this.loadTrades();
+        this.balance = this.loadBalance();
+        this.activeTab = 'new';
+        this.editingId = null;
+        this.searchTerm = '';
+        this.filterDirection = 'all';
+        this.filterResult = 'all';
+        this.formData = this.getEmptyForm();
+        this.render();
+      }
 
-        const TradingJournal = () => {
-            // State & Data Persistence
-            const [trades, setTrades] = useState(() => {
-                const saved = localStorage.getItem('tradingJournalTrades');
-                return saved ? JSON.parse(saved) : [];
-            });
-            const [activeTab, setActiveTab] = useState('new');
-            const [searchTerm, setSearchTerm] = useState('');
-            const [filterDirection, setFilterDirection] = useState('all');
-            const [filterResult, setFilterResult] = useState('all');
-            const [editingId, setEditingId] = useState(null);
-            const [showSuccessMsg, setShowSuccessMsg] = useState(false);
-            
-            const [formData, setFormData] = useState({
-                date: new Date().toISOString().split('T')[0],
-                ticker: '', direction: 'Long', entry: '', exit: '',
-                size: '', stopLoss: '', target: '', strategy: '',
-                setup: '', timeframe: '1D', notes: ''
-            });
+      renderStatistics(stats) {
+        if (!stats) {
+          return `
+            <div class="text-center py-16 text-slate-500">
+              <div class="text-6xl mb-4">📊</div>
+              <p class="text-lg font-semibold">No statistics available yet</p>
+              <p class="text-sm mt-2">Add trades to see your performance metrics</p>
+            </div>
+          `;
+        }
 
-            useEffect(() => {
-                localStorage.setItem('tradingJournalTrades', JSON.stringify(trades));
-                if (window.lucide) lucide.createIcons();
-            }, [trades, activeTab]);
-
-            // Logic: Calculations
-            const calculatePnL = (entry, exit, size, direction) => {
-                const e = parseFloat(entry), x = parseFloat(exit), sz = parseFloat(size || 0);
-                if (isNaN(e) || isNaN(x)) return 0;
-                return direction === 'Long' ? ((x - e) * sz).toFixed(2) : ((e - x) * sz).toFixed(2);
-            };
-
-            const calculateRR = (entry, stop, target, direction) => {
-                const e = parseFloat(entry), s = parseFloat(stop), t = parseFloat(target);
-                if (isNaN(e) || isNaN(s) || isNaN(t)) return null;
-                const risk = direction === 'Long' ? Math.abs(e - s) : Math.abs(s - e);
-                const reward = direction === 'Long' ? Math.abs(t - e) : Math.abs(e - t);
-                return risk === 0 ? null : (reward / risk).toFixed(2);
-            };
-
-            const addTrade = () => {
-                if (!formData.ticker || !formData.entry) return alert("Ticker and Entry are required");
-                const pnl = calculatePnL(formData.entry, formData.exit, formData.size, formData.direction);
-                const newTrade = { 
-                    ...formData, 
-                    id: Date.now(), 
-                    pnl: parseFloat(pnl),
-                    plannedRR: calculateRR(formData.entry, formData.stopLoss, formData.target, formData.direction)
-                };
-                setTrades([newTrade, ...trades]);
-                setFormData({...formData, ticker: '', entry: '', exit: '', size: '', stopLoss: '', target: '', notes: ''});
-                setShowSuccessMsg(true);
-                setTimeout(() => setShowSuccessMsg(false), 3000);
-            };
-
-            // Logic: Statistics
-            const stats = useMemo(() => {
-                if (trades.length === 0) return null;
-                const winners = trades.filter(t => t.pnl > 0);
-                const totalPnL = trades.reduce((sum, t) => sum + t.pnl, 0);
-                return {
-                    totalTrades: trades.length,
-                    winRate: (winners.length / trades.length * 100).toFixed(1),
-                    totalPnL: totalPnL.toFixed(2),
-                    expectancy: (totalPnL / trades.length).toFixed(2)
-                };
-            }, [trades]);
-
-            const currentRR = calculateRR(formData.entry, formData.stopLoss, formData.target, formData.direction);
-
-            return (
-                <div className="min-h-screen p-4 md:p-8 flex items-center justify-center">
-                    <div className="w-full max-w-6xl bg-white/95 backdrop-blur-md rounded-3xl shadow-2xl overflow-hidden animate-fade-in border border-white/20">
-                        {/* Header */}
-                        <div className="p-8 bg-gradient-to-r from-slate-50 to-indigo-50 border-b flex justify-between items-center">
-                            <div>
-                                <h1 className="text-3xl font-black text-slate-900 tracking-tight italic">TRADING JOURNAL PRO</h1>
-                                <p className="text-slate-500 font-bold text-sm uppercase tracking-widest">Performance Analytics</p>
-                            </div>
-                            {showSuccessMsg && <span className="bg-emerald-500 text-white px-4 py-2 rounded-full text-sm font-bold">Trade Saved!</span>}
-                        </div>
-
-                        {/* Navigation Tabs */}
-                        <div className="flex bg-slate-100/50 p-2">
-                            {['new', 'history', 'stats'].map(tab => (
-                                <button key={tab} onClick={() => setActiveTab(tab)} 
-                                    className={`flex-1 py-3 font-black rounded-xl transition-all ${activeTab === tab ? 'bg-white text-indigo-600 shadow-md scale-105' : 'text-slate-400 hover:text-slate-600'}`}>
-                                    {tab.toUpperCase()}
-                                </button>
-                            ))}
-                        </div>
-
-                        {/* Content: New Trade */}
-                        {activeTab === 'new' && (
-                            <div className="p-8 space-y-6">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-black text-slate-400 uppercase tracking-tighter">Ticker</label>
-                                        <input type="text" placeholder="BTC/USD" className="w-full p-4 bg-slate-100 border-none rounded-2xl focus:ring-4 focus:ring-indigo-500/20 font-bold uppercase" 
-                                            value={formData.ticker} onChange={e => setFormData({...formData, ticker: e.target.value})} />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-black text-slate-400 uppercase tracking-tighter">Entry</label>
-                                        <input type="number" placeholder="0.00" className="w-full p-4 bg-slate-100 border-none rounded-2xl" 
-                                            value={formData.entry} onChange={e => setFormData({...formData, entry: e.target.value})} />
-                                    </div>
-                                    <div className="space-y-2">
-                                        <label className="text-xs font-black text-slate-400 uppercase tracking-tighter">Exit</label>
-                                        <input type="number" placeholder="0.00" className="w-full p-4 bg-slate-100 border-none rounded-2xl" 
-                                            value={formData.exit} onChange={e => setFormData({...formData, exit: e.target.value})} />
-                                    </div>
-                                </div>
-
-                                {/* Risk Management UI */}
-                                <div className="bg-gradient-to-br from-indigo-600 to-violet-700 p-8 rounded-3xl text-white shadow-xl shadow-indigo-200">
-                                    <div className="flex items-center gap-2 mb-6">
-                                        <i data-lucide="target" className="w-5 h-5"></i>
-                                        <h3 className="font-black uppercase tracking-widest text-sm">Risk Calculator</h3>
-                                    </div>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-center">
-                                        <input type="number" placeholder="Stop Loss" className="p-4 bg-white/10 border border-white/20 rounded-2xl text-white placeholder-white/50 focus:bg-white/20 transition"
-                                            onChange={e => setFormData({...formData, stopLoss: e.target.value})} />
-                                        <input type="number" placeholder="Target" className="p-4 bg-white/10 border border-white/20 rounded-2xl text-white placeholder-white/50 focus:bg-white/20 transition"
-                                            onChange={e => setFormData({...formData, target: e.target.value})} />
-                                        <div className="text-center">
-                                            <p className="text-xs font-bold text-indigo-200 uppercase">Planned R:R</p>
-                                            <p className="text-4xl font-black">{currentRR ? `${currentRR}:1` : '--'}</p>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                <button onClick={addTrade} className="w-full py-6 bg-slate-900 text-white rounded-2xl font-black text-xl hover:bg-black transition-all shadow-xl active:scale-95">
-                                    SAVE TRADE LOG
-                                </button>
-                            </div>
-                        )}
-
-                        {/* Content: History */}
-                        {activeTab === 'history' && (
-                            <div className="p-8 space-y-4 max-h-[500px] overflow-y-auto">
-                                {trades.length === 0 ? <p className="text-center py-20 text-slate-400 font-bold uppercase tracking-widest">No Logs Found</p> :
-                                    trades.map(t => (
-                                        <div key={t.id} className="p-6 bg-slate-50 rounded-2xl border border-slate-100 flex justify-between items-center group hover:border-indigo-500 transition-all">
-                                            <div className="flex gap-4 items-center">
-                                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black ${t.pnl >= 0 ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
-                                                    {t.direction === 'Long' ? 'L' : 'S'}
-                                                </div>
-                                                <div>
-                                                    <h4 className="font-black text-slate-800 text-lg">{t.ticker}</h4>
-                                                    <p className="text-xs font-bold text-slate-400 uppercase">{t.date}</p>
-                                                </div>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className={`text-xl font-black ${t.pnl >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                                    {t.pnl >= 0 ? '+' : ''}${t.pnl}
-                                                </p>
-                                                <p className="text-xs font-bold text-slate-400 uppercase">P&L Amount</p>
-                                            </div>
-                                        </div>
-                                    ))
-                                }
-                            </div>
-                        )}
-
-                        {/* Content: Stats */}
-                        {activeTab === 'stats' && stats && (
-                            <div className="p-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                                <div className="p-6 bg-blue-50 rounded-3xl border border-blue-100 text-center">
-                                    <p className="text-xs font-black text-blue-400 uppercase mb-1">Win Rate</p>
-                                    <p className="text-4xl font-black text-blue-600">{stats.winRate}%</p>
-                                </div>
-                                <div className="p-6 bg-emerald-50 rounded-3xl border border-emerald-100 text-center">
-                                    <p className="text-xs font-black text-emerald-400 uppercase mb-1">Total P&L</p>
-                                    <p className="text-4xl font-black text-emerald-600">${stats.totalPnL}</p>
-                                </div>
-                                <div className="p-6 bg-violet-50 rounded-3xl border border-violet-100 text-center">
-                                    <p className="text-xs font-black text-violet-400 uppercase mb-1">Trades</p>
-                                    <p className="text-4xl font-black text-violet-600">{stats.totalTrades}</p>
-                                </div>
-                                <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 text-center">
-                                    <p className="text-xs font-black text-slate-400 uppercase mb-1">Expectancy</p>
-                                    <p className="text-4xl font-black text-slate-800">${stats.expectancy}</p>
-                                </div>
-                            </div>
-                        )}
-                    </div>
+        return `
+          <div class="space-y-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div class="bg-gradient-to-br from-blue-50 to-blue-100 p-6 rounded-2xl border-2 border-blue-200 shadow-lg">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-2xl">📊</span>
+                  <h3 class="font-bold text-slate-700">Total Trades</h3>
                 </div>
-            );
-        };
+                <p class="text-4xl font-bold text-blue-600">${stats.totalTrades}</p>
+              </div>
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<TradingJournal />);
-    </script>
+              <div class="bg-gradient-to-br from-emerald-50 to-emerald-100 p-6 rounded-2xl border-2 border-emerald-200 shadow-lg">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-2xl">📈</span>
+                  <h3 class="font-bold text-slate-700">Win Rate</h3>
+                </div>
+                <p class="text-4xl font-bold text-emerald-600">${stats.winRate}%</p>
+                <p class="text-sm text-slate-600 mt-1">${stats.winners}W / ${stats.losers}L</p>
+              </div>
+
+              <div class="bg-gradient-to-br ${stats.totalPnL >= 0 ? 'from-emerald-50 to-emerald-100 border-emerald-200' : 'from-red-50 to-red-100 border-red-200'} p-6 rounded-2xl border-2 shadow-lg">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-2xl">💰</span>
+                  <h3 class="font-bold text-slate-700">Total P&L</h3>
+                </div>
+                <p class="text-4xl font-bold ${stats.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}">${stats.totalPnL}</p>
+              </div>
+
+              <div class="bg-gradient-to-br from-violet-50 to-violet-100 p-6 rounded-2xl border-2 border-violet-200 shadow-lg">
+                <div class="flex items-center gap-2 mb-2">
+                  <span class="text-2xl">🎯</span>
+                  <h3 class="font-bold text-slate-700">Avg R:R</h3>
+                </div>
+                <p class="text-4xl font-bold text-violet-600">${stats.avgRR}</p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div class="bg-white p-6 rounded-2xl border-2 border-slate-200 shadow-lg hover:shadow-xl transition">
+                <h3 class="font-bold text-slate-700 mb-3">Average Win</h3>
+                <p class="text-3xl font-bold text-emerald-600">${stats.avgWin}</p>
+              </div>
+
+              <div class="bg-white p-6 rounded-2xl border-2 border-slate-200 shadow-lg hover:shadow-xl transition">
+                <h3 class="font-bold text-slate-700 mb-3">Average Loss</h3>
+                <p class="text-3xl font-bold text-red-600">${stats.avgLoss}</p>
+              </div>
+
+              <div class="bg-white p-6 rounded-2xl border-2 border-slate-200 shadow-lg hover:shadow-xl transition">
+                <h3 class="font-bold text-slate-700 mb-3">Profit Factor</h3>
+                <p class="text-3xl font-bold text-blue-600">${stats.profitFactor}</p>
+              </div>
+
+              <div class="bg-white p-6 rounded-2xl border-2 border-slate-200 shadow-lg hover:shadow-xl transition">
+                <h3 class="font-bold text-slate-700 mb-3">Expectancy</h3>
+                <p class="text-3xl font-bold ${stats.expectancy >= 0 ? 'text-emerald-600' : 'text-red-600'}">${stats.expectancy}</p>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="bg-gradient-to-br from-emerald-50 to-green-50 p-6 rounded-2xl border-2 border-emerald-300 shadow-lg">
+                <h3 class="font-bold text-slate-700 mb-3 flex items-center gap-2">
+                  <span class="text-2xl">✨</span> Best Performance
+                </h3>
+                <div class="space-y-2">
+                  <div class="flex justify-between items-center">
+                    <span class="text-slate-600">Biggest Win:</span>
+                    <span class="text-xl font-bold text-emerald-600">${stats.biggestWin}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-slate-600">Win Streak:</span>
+                    <span class="text-xl font-bold text-emerald-600">${stats.maxWinStreak}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="bg-gradient-to-br from-red-50 to-rose-50 p-6 rounded-2xl border-2 border-red-300 shadow-lg">
+                <h3 class="font-bold text-slate-700 mb-3 flex items-center gap-2">
+                  <span class="text-2xl">⚠️</span> Areas to Improve
+                </h3>
+                <div class="space-y-2">
+                  <div class="flex justify-between items-center">
+                    <span class="text-slate-600">Biggest Loss:</span>
+                    <span class="text-xl font-bold text-red-600">${stats.biggestLoss}</span>
+                  </div>
+                  <div class="flex justify-between items-center">
+                    <span class="text-slate-600">Loss Streak:</span>
+                    <span class="text-xl font-bold text-red-600">${stats.maxLossStreak}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      attachEventListeners() {
+        // Form inputs
+        const fields = ['date', 'ticker', 'direction', 'entry', 'exit', 'size', 'stopLoss', 'target', 'strategy', 'setup', 'timeframe', 'notes'];
+        fields.forEach(field => {
+          const el = document.getElementById(field);
+          if (el) {
+            el.addEventListener('input', (e) => {
+              this.formData[field] = e.target.value;
+              if (['entry', 'stopLoss', 'target', 'direction'].includes(field)) {
+                this.render(); // Re-render to update R:R
+              }
+            });
+          }
+        });
+
+        // Search and filters
+        const searchInput = document.getElementById('searchInput');
+        if (searchInput) {
+          searchInput.addEventListener('input', (e) => {
+            this.searchTerm = e.target.value;
+            this.render();
+          });
+        }
+
+        const filterDir = document.getElementById('filterDirection');
+        if (filterDir) {
+          filterDir.addEventListener('change', (e) => {
+            this.filterDirection = e.target.value;
+            this.render();
+          });
+        }
+
+        const filterRes = document.getElementById('filterResult');
+        if (filterRes) {
+          filterRes.addEventListener('change', (e) => {
+            this.filterResult = e.target.value;
+            this.render();
+          });
+        }
+      }
+    }
+
+    // Initialize app
+    const app = new TradingJournal();
+  </script>
+
+  <!-- Register Service Worker -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('sw.js')
+          .then(reg => console.log('✅ Service Worker registered'))
+          .catch(err => console.log('❌ Service Worker registration failed:', err));
+      });
+    }
+  </script>
 </body>
 </html>
+
+      getEmptyForm() {
+        return {
+          date: new Date().toISOString().split('T')[0],
+          ticker: '',
+          direction: 'Long',
+          entry: '',
+          exit: '',
+          size: '',
+          stopLoss: '',
+          target: '',
+          strategy: '',
+          setup: '',
+          timeframe: '1D',
+          notes: ''
+        };
+      }
+
+      loadTrades() {
+        const saved = localStorage.getItem('tradingJournalTrades');
+        return saved ? JSON.parse(saved) : [];
+      }
+
+      saveTrades() {
+        localStorage.setItem('tradingJournalTrades', JSON.stringify(this.trades));
+      }
+
+      loadBalance() {
+        const saved = localStorage.getItem('tradingJournalBalance');
+        return saved ? parseFloat(saved) : 0;
+      }
+
+      saveBalance() {
+        localStorage.setItem('tradingJournalBalance', this.balance.toString());
+      }
+
+      updateBalance(amount) {
+        this.balance += parseFloat(amount);
+        this.saveBalance();
+      }
+
+      setBalance() {
+        const input = prompt('Enter your current account balance:', this.balance);
+        if (input !== null && input !== '') {
+          const newBalance = parseFloat(input);
+          if (!isNaN(newBalance)) {
+            this.balance = newBalance;
+            this.saveBalance();
+            this.showSuccess('Balance updated!');
+            this.render();
+          } else {
+            alert('Please enter a valid number');
+          }
+        }
+      }
+
+      calculateRR(entry, stop, target, direction) {
+        const e = parseFloat(entry);
+        const s = parseFloat(stop);
+        const t = parseFloat(target);
+        if (isNaN(e) || isNaN(s) || isNaN(t)) return null;
+        const risk = direction === 'Long' ? Math.abs(e - s) : Math.abs(s - e);
+        const reward = direction === 'Long' ? Math.abs(t - e) : Math.abs(e - t);
+        return risk === 0 ? null : (reward / risk).toFixed(2);
+      }
+
+      calculateActualRR(entry, exit, stop, direction) {
+        const e = parseFloat(entry);
+        const x = parseFloat(exit);
+        const s = parseFloat(stop);
+        if (isNaN(e) || isNaN(x) || isNaN(s)) return null;
+        const risk = direction === 'Long' ? Math.abs(e - s) : Math.abs(s - e);
+        const actualReward = direction === 'Long' ? (x - e) : (e - x);
+        return risk === 0 ? null : (actualReward / risk).toFixed(2);
+      }
+
+      calculatePnL(entry, exit, size, direction) {
+        const e = parseFloat(entry);
+        const x = parseFloat(exit);
+        const sz = parseFloat(size);
+        if (isNaN(e) || isNaN(x) || isNaN(sz)) return 0;
+        return direction === 'Long' ? ((x - e) * sz).toFixed(2) : ((e - x) * sz).toFixed(2);
+      }
+
+      calculatePnLPercent(entry, exit, direction) {
+        const e = parseFloat(entry);
+        const x = parseFloat(exit);
+        if (isNaN(e) || isNaN(x) || e === 0) return 0;
+        const percent = direction === 'Long' ? ((x - e) / e) * 100 : ((e - x) / e) * 100;
+        return percent.toFixed(2);
+      }
+
+      addTrade() {
+        if (!this.formData.date || !this.formData.ticker || !this.formData.entry || !this.formData.exit) {
+          alert('Please fill in: Date, Ticker, Entry, Exit');
+          return;
+        }
+
+        const pnl = this.calculatePnL(this.formData.entry, this.formData.exit, this.formData.size, this.formData.direction);
+        const pnlPercent = this.calculatePnLPercent(this.formData.entry, this.formData.exit, this.formData.direction);
+        const plannedRR = this.calculateRR(this.formData.entry, this.formData.stopLoss, this.formData.target, this.formData.direction);
+        const actualRR = this.calculateActualRR(this.formData.entry, this.formData.exit, this.formData.stopLoss, this.formData.direction);
+
+        const newTrade = {
+          id: Date.now(),
+          ...this.formData,
+          pnl: parseFloat(pnl),
+          pnlPercent: parseFloat(pnlPercent),
+          plannedRR,
+          actualRR
+        };
+
+        this.trades.unshift(newTrade);
+        this.saveTrades();
+        this.updateBalance(pnl);
+        
+        const keepDate = this.formData.date;
+        const keepDirection = this.formData.direction;
+        const keepTimeframe = this.formData.timeframe;
+        this.formData = this.getEmptyForm();
+        this.formData.date = keepDate;
+        this.formData.direction = keepDirection;
+        this.formData.timeframe = keepTimeframe;
+        
+        this.showSuccess('Trade added successfully!');
+        this.render();
+      }
+
+      updateTrade() {
+        const oldTrade = this.trades.find(t => t.id === this.editingId);
+        const oldPnL = oldTrade ? oldTrade.pnl : 0;
+
+        const pnl = this.calculatePnL(this.formData.entry, this.formData.exit, this.formData.size, this.formData.direction);
+        const pnlPercent = this.calculatePnLPercent(this.formData.entry, this.formData.exit, this.formData.direction);
+        const plannedRR = this.calculateRR(this.formData.entry, this.formData.stopLoss, this.formData.target, this.formData.direction);
+        const actualRR = this.calculateActualRR(this.formData.entry, this.formData.exit, this.formData.stopLoss, this.formData.direction);
+
+        this.trades = this.trades.map(t => t.id === this.editingId ? {
+          ...this.formData,
+          id: this.editingId,
+          pnl: parseFloat(pnl),
+          pnlPercent: parseFloat(pnlPercent),
+          plannedRR,
+          actualRR
+        } : t);
+
+        this.saveTrades();
+        
+        // Update balance: remove old P&L and add new P&L
+        this.balance = this.balance - oldPnL + parseFloat(pnl);
+        this.saveBalance();
+
+        this.editingId = null;
+        this.formData = this.getEmptyForm();
+        this.showSuccess('Trade updated successfully!');
+        this.render();
+      }
+
+      deleteTrade(id) {
+        if (confirm('Are you sure you want to delete this trade?')) {
+          const trade = this.trades.find(t => t.id === id);
+          if (trade) {
+            this.updateBalance(-trade.pnl); // Remove P&L from balance
+            this.trades = this.trades.filter(t => t.id !== id);
+            this.saveTrades();
+            this.showSuccess('Trade deleted successfully!');
+            this.render();
+          }
+        }
+      }
+
+      startEdit(tradeId) {
+        const trade = this.trades.find(t => t.id === tradeId);
+        if (trade) {
+          this.editingId = trade.id;
+          this.formData = { ...trade };
+          this.activeTab = 'new';
+          this.render();
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+      }
+
+      cancelEdit() {
+        this.editingId = null;
+        this.formData = this.getEmptyForm();
+        this.render();
+      }
+
+      getFilteredTrades() {
+        return this.trades.filter(trade => {
+          const matchesSearch = trade.ticker.toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+                               (trade.strategy || '').toLowerCase().includes(this.searchTerm.toLowerCase()) ||
+                               (trade.setup || '').toLowerCase().includes(this.searchTerm.toLowerCase());
+          const matchesDirection = this.filterDirection === 'all' || trade.direction === this.filterDirection;
+          const matchesResult = this.filterResult === 'all' || 
+                               (this.filterResult === 'win' && trade.pnl > 0) ||
+                               (this.filterResult === 'loss' && trade.pnl < 0);
+          return matchesSearch && matchesDirection && matchesResult;
+        });
+      }
+
+      calculateStats() {
+        if (this.trades.length === 0) return null;
+
+        const winners = this.trades.filter(t => t.pnl > 0);
+        const losers = this.trades.filter(t => t.pnl < 0);
+        const totalPnL = this.trades.reduce((sum, t) => sum + t.pnl, 0);
+        const winRate = (winners.length / this.trades.length * 100).toFixed(1);
+        const avgWin = winners.length > 0 ? (winners.reduce((sum, t) => sum + t.pnl, 0) / winners.length).toFixed(2) : 0;
+        const avgLoss = losers.length > 0 ? (losers.reduce((sum, t) => sum + t.pnl, 0) / losers.length).toFixed(2) : 0;
+        const profitFactor = avgLoss !== 0 ? Math.abs(avgWin / avgLoss).toFixed(2) : 'N/A';
+
+        const tradesWithRR = this.trades.filter(t => t.actualRR !== null);
+        const avgRR = tradesWithRR.length > 0 
+          ? (tradesWithRR.reduce((sum, t) => sum + parseFloat(t.actualRR), 0) / tradesWithRR.length).toFixed(2)
+          : 'N/A';
+
+        const expectancy = ((winners.length / this.trades.length) * avgWin) + ((losers.length / this.trades.length) * avgLoss);
+        const biggestWin = winners.length > 0 ? Math.max(...winners.map(t => t.pnl)).toFixed(2) : 0;
+        const biggestLoss = losers.length > 0 ? Math.min(...losers.map(t => t.pnl)).toFixed(2) : 0;
+
+        let maxWinStreak = 0, maxLossStreak = 0, currentStreak = 0, tempLossStreak = 0;
+        [...this.trades].reverse().forEach(t => {
+          if (t.pnl > 0) {
+            currentStreak++;
+            tempLossStreak = 0;
+            maxWinStreak = Math.max(maxWinStreak, currentStreak);
+          } else {
+            tempLossStreak++;
+            currentStreak = 0;
+            maxLossStreak = Math.max(maxLossStreak, tempLossStreak);
+          }
+        });
+
+        return {
+          totalTrades: this.trades.length,
+          winners: winners.length,
+          losers: losers.length,
+          winRate,
+          totalPnL: totalPnL.toFixed(2),
+          avgWin,
+          avgLoss,
+          profitFactor,
+          avgRR,
+          expectancy: expectancy.toFixed(2),
+          biggestWin,
+          biggestLoss,
+          maxWinStreak,
+          maxLossStreak
+        };
+      }
+
+      exportCSV() {
+        if (this.trades.length === 0) {
+          alert('No trades to export');
+          return;
+        }
+
+        const headers = ['Date', 'Ticker', 'Direction', 'Entry', 'Exit', 'Size', 'Stop Loss', 'Target', 
+                         'P&L', 'P&L %', 'Planned R:R', 'Actual R:R', 'Strategy', 'Setup', 'Timeframe', 'Notes'];
+        
+        const csv = [
+          headers.join(','),
+          ...this.trades.map(t => [
+            t.date, t.ticker, t.direction, t.entry, t.exit, t.size, t.stopLoss, t.target,
+            t.pnl, t.pnlPercent, t.plannedRR || '', t.actualRR || '', 
+            `"${t.strategy || ''}"`, `"${t.setup || ''}"`, t.timeframe, `"${t.notes || ''}"`
+          ].join(','))
+        ].join('\n');
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `trading_journal_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+      }
+
+      showSuccess(msg) {
+        const div = document.createElement('div');
+        div.className = 'fixed top-4 right-4 bg-emerald-500 text-white px-6 py-3 rounded-lg shadow-lg z-50 fade-in';
+        div.innerHTML = `<div class="flex items-center gap-2"><span class="text-xl">✓</span><span>${msg}</span></div>`;
+        document.body.appendChild(div);
+        setTimeout(() => div.remove(), 3000);
+      }
+
+      render() {
+        const stats = this.calculateStats();
+        const filteredTrades = this.getFilteredTrades();
+        const currentRR = this.calculateRR(this.formData.entry, this.formData.stopLoss, this.formData.target, this.formData.direction);
+
+        document.getElementById('app').innerHTML = `
+          <div class="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900 p-4">
+            <div class="max-w-7xl mx-auto">
+              <div class="bg-white/95 backdrop-blur rounded-2xl shadow-2xl p-6">
+                
+                <!-- Header -->
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                  <div>
+                    <h1 class="text-4xl font-bold bg-gradient-to-r from-blue-600 via-violet-600 to-pink-600 bg-clip-text text-transparent">
+                      Trading Journal
+                    </h1>
+                    <p class="text-slate-600 text-sm mt-1">Track, Analyze, Improve</p>
+                  </div>
+                  <div class="flex gap-3">
+                    <button onclick="app.setBalance()" class="flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl hover:bg-blue-700 transition shadow-lg font-semibold">
+                      💰 Balance: $${this.balance.toFixed(2)}
+                    </button>
+                    <button onclick="app.exportCSV()" class="flex items-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-xl hover:bg-emerald-700 transition shadow-lg font-semibold">
+                      📥 Export
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Quick Stats -->
+                ${stats ? `
+                  <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6 p-4 bg-gradient-to-r from-slate-50 to-blue-50 rounded-xl border border-slate-200">
+                    <div class="text-center">
+                      <div class="text-2xl font-bold text-slate-800">${stats.totalTrades}</div>
+                      <div class="text-xs text-slate-600">Trades</div>
+                    </div>
+                    <div class="text-center">
+                      <div class="text-2xl font-bold text-emerald-600">${stats.winRate}%</div>
+                      <div class="text-xs text-slate-600">Win Rate</div>
+                    </div>
+                    <div class="text-center">
+                      <div class="text-2xl font-bold ${stats.totalPnL >= 0 ? 'text-emerald-600' : 'text-red-600'}">$${stats.totalPnL}</div>
+                      <div class="text-xs text-slate-600">Total P&L</div>
+                    </div>
+                    <div class="text-center">
+                      <div class="text-2xl font-bold text-violet-600">${stats.avgRR}</div>
+                      <div class="text-xs text-slate-600">Avg R:R</div>
+                    </div>
+                    <div class="text-center">
+                      <div class="text-2xl font-bold ${stats.expectancy >= 0 ? 'text-emerald-600' : 'text-red-600'}">$${stats.expectancy}</div>
+                      <div class="text-xs text-slate-600">Expectancy</div>
+                    </div>
+                  </div>
+                ` : ''}
+
+                <!-- Tabs -->
+                <div class="flex gap-2 border-b-2 border-slate-200 mb-6">
+                  <button onclick="app.activeTab='new'; app.render()" class="pb-3 px-6 font-semibold transition relative ${this.activeTab === 'new' ? 'text-blue-600' : 'text-slate-500 hover:text-slate-700'}">
+                    ${this.editingId ? 'Edit Trade' : 'New Trade'}
+                    ${this.activeTab === 'new' ? '<div class="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-600 to-violet-600"></div>' : ''}
+                  </button>
+                  <button onclick="app.activeTab='history'; app.cancelEdit()" class="pb-3 px-6 font-semibold transition relative ${this.activeTab === 'history' ? 'text-blue-600' : 'text-slate-500 hover:text-slate-700'}">
+                    Trade History ${filteredTrades.length > 0 ? `<span class="ml-2 px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full text-xs">${filteredTrades.length}</span>` : ''}
+                    ${this.activeTab === 'history' ? '<div class="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-600 to-violet-600"></div>' : ''}
+                  </button>
+                  <button onclick="app.activeTab='stats'; app.cancelEdit()" class="pb-3 px-6 font-semibold transition relative ${this.activeTab === 'stats' ? 'text-blue-600' : 'text-slate-500 hover:text-slate-700'}">
+                    Statistics
+                    ${this.activeTab === 'stats' ? '<div class="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-blue-600 to-violet-600"></div>' : ''}
+                  </button>
+                </div>
+
+                <!-- Tab Content -->
+                ${this.activeTab === 'new' ? this.renderNewTradeForm(currentRR) : ''}
+                ${this.activeTab === 'history' ? this.renderTradeHistory(filteredTrades) : ''}
+                ${this.activeTab === 'stats' ? this.renderStatistics(stats) : ''}
+              </div>
+            </div>
+          </div>
+        `;
+
+        this.attachEventListeners();
+      }
+
+      renderNewTradeForm(currentRR) {
+        return `
+          <div class="space-y-5">
+            ${this.editingId ? `
+              <div class="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-lg flex justify-between items-center">
+                <div class="flex items-center gap-2">
+                  <span class="text-2xl">✏️</span>
+                  <span class="font-semibold text-amber-900">Editing trade - Changes will update your balance</span>
+                </div>
+                <button onclick="app.cancelEdit()" class="text-amber-600 hover:text-amber-800 font-semibold px-3 py-1 rounded hover:bg-amber-100 transition">
+                  ✕ Cancel
+                </button>
+              </div>
+            ` : ''}
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 mb-2">Date *</label>
+                <input type="date" id="date" value="${this.formData.date}" class="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 mb-2">Ticker *</label>
+                <input type="text" id="ticker" value="${this.formData.ticker}" placeholder="AAPL" class="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition uppercase">
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 mb-2">Direction</label>
+                <select id="direction" class="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                  <option ${this.formData.direction === 'Long' ? 'selected' : ''}>Long</option>
+                  <option ${this.formData.direction === 'Short' ? 'selected' : ''}>Short</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 mb-2">Entry Price *</label>
+                <input type="number" step="0.01" id="entry" value="${this.formData.entry}" placeholder="150.50" class="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 mb-2">Exit Price *</label>
+                <input type="number" step="0.01" id="exit" value="${this.formData.exit}" placeholder="155.75" class="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 mb-2">Position Size</label>
+                <input type="number" id="size" value="${this.formData.size}" placeholder="100" class="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 mb-2">Timeframe</label>
+                <select id="timeframe" class="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                  <option ${this.formData.timeframe === '1m' ? 'selected' : ''}>1m</option>
+                  <option ${this.formData.timeframe === '5m' ? 'selected' : ''}>5m</option>
+                  <option ${this.formData.timeframe === '15m' ? 'selected' : ''}>15m</option>
+                  <option ${this.formData.timeframe === '1h' ? 'selected' : ''}>1h</option>
+                  <option ${this.formData.timeframe === '4h' ? 'selected' : ''}>4h</option>
+                  <option ${this.formData.timeframe === '1D' ? 'selected' : ''}>1D</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="bg-gradient-to-br from-violet-50 to-blue-50 p-5 rounded-xl border-2 border-violet-200">
+              <h3 class="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                <span class="text-xl">🎯</span> Risk Management
+              </h3>
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-2">Stop Loss</label>
+                  <input type="number" step="0.01" id="stopLoss" value="${this.formData.stopLoss}" placeholder="148.00" class="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition bg-white">
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 mb-2">Target</label>
+                  <input type="number" step="0.01" id="target" value="${this.formData.target}" placeholder="160.00" class="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-violet-500 focus:border-violet-500 transition bg-white">
+                </div>
+                <div class="flex items-end">
+                  <div class="w-full px-4 py-3 bg-gradient-to-br from-violet-100 to-purple-100 rounded-xl border-2 border-violet-300">
+                    <div class="text-xs font-medium text-slate-600">Planned R:R</div>
+                    <div class="text-3xl font-bold text-violet-600">${currentRR ? currentRR + ':1' : '--'}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 mb-2">Strategy</label>
+                <input type="text" id="strategy" value="${this.formData.strategy}" placeholder="Breakout, Momentum, Reversal..." class="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+              </div>
+              <div>
+                <label class="block text-sm font-semibold text-slate-700 mb-2">Setup</label>
+                <input type="text" id="setup" value="${this.formData.setup}" placeholder="Bull Flag, Head & Shoulders..." class="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+              </div>
+            </div>
+
+            <div>
+              <label class="block text-sm font-semibold text-slate-700 mb-2">Notes</label>
+              <textarea id="notes" rows="4" placeholder="Trade reasoning, emotions, lessons learned..." class="w-full px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">${this.formData.notes}</textarea>
+            </div>
+
+            <button onclick="app.${this.editingId ? 'updateTrade' : 'addTrade'}()" class="w-full bg-gradient-to-r from-blue-600 via-violet-600 to-purple-600 text-white py-4 rounded-xl hover:from-blue-700 hover:via-violet-700 hover:to-purple-700 transition flex items-center justify-center gap-3 font-bold shadow-xl text-lg hover:shadow-2xl">
+              <span class="text-2xl">${this.editingId ? '✓' : '+'}</span>
+              <span>${this.editingId ? 'Update Trade' : 'Add Trade'}</span>
+            </button>
+          </div>
+        `;
+      }
+
+      renderTradeHistory(filteredTrades) {
+        return `
+          <div>
+            <!-- Search and Filters -->
+            <div class="mb-6 space-y-4">
+              <div class="flex flex-col md:flex-row gap-3">
+                <div class="flex-1 relative">
+                  <input type="text" id="searchInput" value="${this.searchTerm}" placeholder="Search by ticker, strategy, setup..." class="w-full pl-10 pr-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition">
+                  <span class="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400">🔍</span>
+                </div>
+                <div class="flex gap-3">
+                  <select id="filterDirection" class="px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 transition">
+                    <option value="all" ${this.filterDirection === 'all' ? 'selected' : ''}>All Directions</option>
+                    <option value="Long" ${this.filterDirection === 'Long' ? 'selected' : ''}>Long Only</option>
+                    <option value="Short" ${this.filterDirection === 'Short' ? 'selected' : ''}>Short Only</option>
+                  </select>
+                  <select id="filterResult" class="px-4 py-3 border-2 border-slate-300 rounded-xl focus:ring-2 focus:ring-blue-500 transition">
+                    <option value="all" ${this.filterResult === 'all' ? 'selected' : ''}>All Results</option>
+                    <option value="win" ${this.filterResult === 'win' ? 'selected' : ''}>Winners</option>
+                    <option value="loss" ${this.filterResult === 'loss' ? 'selected' : ''}>Losers</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            ${filteredTrades.length === 0 ? `
+              <div class="text-center py-16 text-slate-500">
+                <div class="text-6xl mb-4">📊</div>
+                <p class="text-lg font-semibold">${this.trades.length === 0 ? 'No trades recorded yet' : 'No trades match your filters'}</p>
+                <p class="text-sm mt-2">${this.trades.length === 0 ? 'Start logging your trades to track your progress' : 'Try adjusting your search or filters'}</p>
+              </div>
+            ` : `
+              <div class="space-y-4">
+                ${filteredTrades.map(trade => `
+                  <div class="group border-2 border-slate-200 rounded-2xl p-5 hover:shadow-xl hover:border-blue-300 transition-all bg-gradient-to-br from-white to-slate-50">
+                    <div class="flex justify-between items-start mb-4">
+                      <div class="flex items-center gap-3 flex-wrap">
+                        <div class="text-2xl font-bold text-slate-800">${trade.ticker}</div>
+                        <span class="px-3 py-1.5 rounded-full text-sm font-bold ${trade.direction === 'Long' ? 'bg-emerald-100 text-emerald-800' : 'bg-rose-100 text-rose-800'}">
+                          ${trade.direction}
+                        </span>
+                        <span class="text-2xl font-bold ${trade.pnl >= 0 ? 'text-emerald-600' : 'text-red-600'}">
+                          ${trade.pnl >= 0 ? '+' : ''}${trade.pnl}
+                        </span>
+                        <span class="text-lg text-slate-600">
+                          (${trade.pnl >= 0 ? '+' : ''}${trade.pnlPercent}%)
+                        </span>
+                        ${trade.actualRR ? `
+                          <span class="px-3 py-1.5 bg-violet-100 text-violet-800 rounded-full text-sm font-bold">${trade.actualRR}R</span>
+                        ` : ''}
+                      </div>
+                      <div class="flex gap-2">
+                        <button onclick="app.startEdit(${trade.id})" class="text-blue-600 hover:text-blue-800 p-2 hover:bg-blue-50 rounded-lg transition" title="Edit trade">
+                          <span class="text-xl">✏️</span>
+                        </button>
+                        <button onclick="app.deleteTrade(${trade.id})" class="text-red-500 hover:text-red-700 p-2 hover:bg-red-50 rounded-lg transition" title="Delete trade">
+                          <span class="text-xl">🗑️</span>
+                        </button>
+                      </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm mb-3">
+                      <div class="bg-white rounded-lg p-3 border border-slate-200">
+                        <span class="text-slate-500 font-medium">Date:</span> 
+                        <div class="font-semibold text-slate-800">${trade.date}</div>
+                      </div>
+                      <div class="bg-white rounded-lg p-3 border border-slate-200">
+                        <span class="text-slate-500 font-medium">Entry:</span> 
+                        <div class="font-semibold text-slate-800">${trade.entry}</div>
+                      </div>
+                      <div class="bg-white rounded-lg p-3 border border-slate-200">
+                        <span class="text-slate-500 font-medium">Exit:</span> 
+                        <div class="font-semibold text-slate-800">${trade.exit}</div>
+                      </div>
+                      <div class="bg-white rounded-lg p-3 border border-slate-200">
+                        <span class="text-slate-500 font-medium">Size:</span> 
+                        <div class="font-semibold text-slate-800">${trade.size || '-'}</div>
+                      </div>
+                    </div>
+
+                    ${(trade.strategy || trade.setup || trade.timeframe || trade.plannedRR) ? `
+                      <div class="flex gap-2 text-sm mb-3 flex-wrap">
+                        ${trade.strategy ? `<span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full font-medium">${trade.strategy}</span>` : ''}
+                        ${trade.setup ? `<span class="px-3 py-1 bg-indigo-100 text-indigo-800 rounded-full font-medium">${trade.setup}</span>` : ''}
+                        ${trade.timeframe ? `<span class="px-3 py-1 bg-amber-100 text-amber-800 rounded-full font-medium">${trade.timeframe}</span>` : ''}
+                        ${trade.plannedRR ? `<span class="px-3 py-1 bg-purple-100 text-purple-800 rounded-full font-medium">Planned: ${trade.plannedRR}R</span>` : ''}
+                      </div>
+                    ` : ''}
+
+                    ${trade.notes ? `
+                      <div class="text-sm text-slate-700 bg-slate-100 rounded-lg p-3 mt-3 border border-slate-200">${trade.notes}</div>
+                    ` : ''}
+                  </div>
+                `).join('')}
+              </div>
+            `}
+          </div>
+        `;
